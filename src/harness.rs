@@ -772,6 +772,9 @@ pub struct BenchOptions<'a> {
 /// Times the recorded cases against the original and the built Rust module, bridge included,
 /// and marks the functions whose recorded cases do not all match.
 pub fn bench(opts: &BenchOptions) -> Result<Vec<BenchRow>> {
+    if opts.min_ms == 0 {
+        bail!("`--min-ms` must be at least 1");
+    }
     let mut rows = time_functions(opts)?;
     let crate_dir = std::path::absolute(opts.crate_dir)?;
     let diff = DiffOptions {

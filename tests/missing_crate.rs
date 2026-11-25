@@ -72,3 +72,30 @@ fn a_folder_without_a_manifest_still_names_the_manifest() {
     assert!(msg.contains("rust-anything.json"), "{msg}");
     assert!(msg.contains("run `rust-anything bridge` first"), "{msg}");
 }
+
+#[test]
+fn bench_and_report_reject_zero_min_ms() {
+    let dir = missing("zero-min-ms");
+    let err = rust_anything::harness::bench(&rust_anything::harness::BenchOptions {
+        crate_dir: &dir,
+        min_ms: 0,
+        resolve_from: None,
+        node_args: &[],
+    })
+    .unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("--min-ms"), "{msg}");
+    assert!(msg.contains("at least 1"), "{msg}");
+
+    let err = card::report(&card::Options {
+        crate_dir: &dir,
+        out: None,
+        min_ms: 0,
+        node_args: &[],
+        resolve_from: None,
+    })
+    .unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("--min-ms"), "{msg}");
+    assert!(msg.contains("at least 1"), "{msg}");
+}

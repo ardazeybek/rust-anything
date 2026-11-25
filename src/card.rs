@@ -64,6 +64,7 @@ pub struct Options<'a> {
 }
 
 pub fn report(opts: &Options) -> Result<Card> {
+    anyhow::ensure!(opts.min_ms > 0, "`--min-ms` must be at least 1");
     let crate_dir = opts.crate_dir.canonical().with_context(|| {
         format!(
             "resolving {} (run `rust-anything bridge` first)",
