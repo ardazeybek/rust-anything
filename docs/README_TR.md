@@ -41,7 +41,7 @@ Türkiye'de 🇹🇷 <a href="https://github.com/erkamyaman">erKam Yaman</a> tar
   <sub>ms, Fuse.js ve json-server'dan alınan 59 gerçek dosyada Prettier ve Rust portu (Apple M4). Bayt bayt aynı çıktı. <a href="real-world.md#prettier">Nasıl ölçüldü</a>.</sub>
 </p>
 
-<p align="center"><sub>PHP ve C#: kayıt, tekrar oynatma ve ön kapı; ayrıca FFI ve P/Invoke üzerinden birim portları.</sub></p>
+<p align="center"><sub>PHP, C# ve PowerShell: kayıt, tekrar oynatma ve ön kapı; ayrıca FFI ve P/Invoke üzerinden birim portları.</sub></p>
 
 <table>
   <tr>

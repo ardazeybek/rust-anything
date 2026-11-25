@@ -41,7 +41,7 @@ Türkiyədə 🇹🇷 <a href="https://github.com/erkamyaman">erKam Yaman</a> t�
   <sub>ms, Fuse.js və json-server-dən götürülmüş 59 real faylda Prettier onun Rust portuna qarşı (Apple M4). Bayt-bayt eyni çıxış. <a href="real-world.md#prettier">Necə ölçülüb</a>.</sub>
 </p>
 
-<p align="center"><sub>PHP və C#: qeyd, təkrar və front door, həmçinin FFI və P/Invoke vasitəsilə vahid portları.</sub></p>
+<p align="center"><sub>PHP, C# və PowerShell: qeyd, təkrar və front door, həmçinin FFI və P/Invoke vasitəsilə vahid portları.</sub></p>
 
 <table>
   <tr>
