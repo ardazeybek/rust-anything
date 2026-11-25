@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `bench --min-ms 0` and `report --min-ms 0` (and MCP `bench`/`report` with `min_ms: 0`) are refused
+  with `` `--min-ms` must be at least 1 ``, like `fuzz --cases 0`, instead of timing a single pass
+  (#561 by @ardazeybek).
 - A failed MCP tool call whose program is missing (`` `cargo` not found on PATH ``) gets the
   `missing_tool` code with `rust-anything doctor` as the next step, instead of a generic `failed`
   (#557 by @Lewandox).
