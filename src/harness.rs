@@ -277,6 +277,11 @@ pub(crate) fn generate_cases_salted(
 }
 
 pub fn record(opts: &RecordOptions) -> Result<RecordOutcome> {
+    if opts.count == 0 && opts.inputs.is_none() {
+        bail!(
+            "`--count 0` records nothing: pass `--count` 1 or more, or give cases with `--inputs` or `--from-tests`"
+        );
+    }
     let crate_dir = std::path::absolute(opts.crate_dir)?;
     let opts = &RecordOptions {
         crate_dir: &crate_dir,
