@@ -258,6 +258,12 @@ const FAILURES: &[FailureKind] = &[
         next: Some("rust-anything build {path}"),
     },
     FailureKind {
+        code: "missing_tool",
+        retryable: false,
+        matches: |t| t.contains("` not found") && t.contains("`rust-anything doctor`"),
+        next: Some("rust-anything doctor"),
+    },
+    FailureKind {
         code: "build_failed",
         retryable: false,
         matches: |t| t.contains("cargo build") && t.contains("failed"),
@@ -723,6 +729,46 @@ fn opt_string_list(args: &Value, key: &str) -> Result<Option<Vec<String>>> {
     }
 }
 
+fn opt_u64(args: &Value, key: &str) -> Result<Option<u64>> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .map(Some)
+            .with_context(|| format!("`{key}` must be a non-negative integer, not {v}")),
+    }
+}
+
+fn opt_usize(args: &Value, key: &str) -> Result<Option<usize>> {
+    match opt_u64(args, key)? {
+        None => Ok(None),
+        Some(n) => Ok(Some(
+            usize::try_from(n).with_context(|| format!("`{key}` is too large"))?,
+        )),
+    }
+}
+
+fn opt_u16(args: &Value, key: &str) -> Result<Option<u16>> {
+    match opt_u64(args, key)? {
+        None => Ok(None),
+        Some(n) => {
+            Ok(Some(u16::try_from(n).with_context(|| {
+                format!("`{key}` must be at most {}", u16::MAX)
+            })?))
+        }
+    }
+}
+
+fn opt_f64(args: &Value, key: &str) -> Result<Option<f64>> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_f64()
+            .map(Some)
+            .with_context(|| format!("`{key}` must be a number, not {v}")),
+    }
+}
+
 fn call(name: &str, args: &Value) -> Result<Value> {
     let path = |key: &str| -> Result<PathBuf> {
         args[key]
@@ -790,6 +836,10 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             if profile == Profile::Host && !args["device"].is_null() {
                 anyhow::bail!("`device` needs profile `android`");
             }
+            let float_tolerance = opt_f64(args, "float_tolerance")?
+                .map(crate::tolerance::check)
+                .transpose()?;
+            let count = opt_usize(args, "count")?.unwrap_or(200);
             let mut inputs = opt_path("inputs");
             let test_command = strings("test_command");
             let captured = if test_command.is_empty() {
@@ -809,9 +859,9 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             };
             let module = opt_path("module");
             let resolve_from = opt_path("resolve_from");
-            if let Some(t) = args["float_tolerance"].as_f64() {
+            if let Some(t) = float_tolerance {
                 let mut manifest = bridge::Manifest::load(&crate_dir)?;
-                manifest.float_tolerance = (crate::tolerance::check(t)? > 0.0).then_some(t);
+                manifest.float_tolerance = (t > 0.0).then_some(t);
                 manifest.save(&crate_dir)?;
             }
             if let Some(on) = args["ignore_key_order"].as_bool() {
@@ -825,9 +875,7 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             };
             let opts = harness::RecordOptions {
                 crate_dir: &crate_dir,
-                count: args["count"]
-                    .as_u64()
-                    .map_or(200, |n| usize::try_from(n).unwrap_or(200)),
+                count,
                 inputs: inputs.as_deref(),
                 module: module.as_deref(),
                 resolve_from: resolve_from.as_deref(),
@@ -911,7 +959,7 @@ fn call(name: &str, args: &Value) -> Result<Value> {
                 module: module.as_deref(),
                 ignore_key_order: args["ignore_key_order"].as_bool().unwrap_or(false),
                 node_args: &strings("node_args"),
-                float_tolerance: args["float_tolerance"].as_f64(),
+                float_tolerance: opt_f64(args, "float_tolerance")?,
             };
             serde_json::to_value(match profile_arg(args)? {
                 Profile::Host => {
@@ -932,7 +980,7 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             let resolve_from = opt_path("resolve_from");
             let rows = harness::bench(&harness::BenchOptions {
                 crate_dir: &crate_dir,
-                min_ms: args["min_ms"].as_u64().unwrap_or(200),
+                min_ms: opt_u64(args, "min_ms")?.unwrap_or(200),
                 resolve_from: resolve_from.as_deref(),
                 node_args: &strings("node_args"),
             })?;
@@ -946,7 +994,7 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             let crate_dir = path("crate")?;
             let resolve_from = opt_path("resolve_from");
             let keep = keep_arg(args)?;
-            let time = match args["time"].as_f64() {
+            let time = match opt_f64(args, "time")? {
                 Some(0.0) => Some(std::time::Duration::ZERO),
                 Some(t) if t.is_finite() && t > 0.0 => {
                     Some(crate::process::seconds(t).context("`time` is too large")?)
@@ -956,10 +1004,8 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             };
             serde_json::to_value(crate::fuzz::fuzz(&crate::fuzz::FuzzOptions {
                 crate_dir: &crate_dir,
-                cases: args["cases"]
-                    .as_u64()
-                    .map_or(200, |n| usize::try_from(n).unwrap_or(200)),
-                seed: args["seed"].as_u64(),
+                cases: opt_usize(args, "cases")?.unwrap_or(200),
+                seed: opt_u64(args, "seed")?,
                 time,
                 keep,
                 resolve_from: resolve_from.as_deref(),
@@ -998,18 +1044,16 @@ fn call(name: &str, args: &Value) -> Result<Value> {
                 _ => None,
             };
             let root = path("root")?;
+            let count = opt_usize(args, "count")?.unwrap_or(200);
+            let rounds = opt_usize(args, "rounds")?.unwrap_or(3);
             serde_json::to_value(crate::go::go(&crate::go::Options {
                 root: &root,
                 command: &command,
                 lang,
                 agent: args["agent"].as_str(),
                 function: args["function"].as_str(),
-                count: args["count"]
-                    .as_u64()
-                    .map_or(200, |n| usize::try_from(n).unwrap_or(200)),
-                rounds: args["rounds"]
-                    .as_u64()
-                    .map_or(3, |n| usize::try_from(n).unwrap_or(3)),
+                count,
+                rounds,
             })?)?
         }
         "enable" => {
@@ -1061,7 +1105,7 @@ fn call(name: &str, args: &Value) -> Result<Value> {
             serde_json::to_value(crate::card::report(&crate::card::Options {
                 crate_dir: &crate_dir,
                 out: out.as_deref(),
-                min_ms: args["min_ms"].as_u64().unwrap_or(200),
+                min_ms: opt_u64(args, "min_ms")?.unwrap_or(200),
                 node_args: &strings("node_args"),
                 resolve_from: opt_path("resolve_from").as_deref(),
             })?)?
@@ -1105,13 +1149,13 @@ fn call(name: &str, args: &Value) -> Result<Value> {
                 traps: args["traps"].as_bool().unwrap_or(true),
                 timeout_secs,
                 http: args.get("http").and_then(Value::as_bool),
-                port: args["port"].as_u64().and_then(|p| u16::try_from(p).ok()),
+                port: opt_u16(args, "port")?,
                 server_args: server_args.as_deref(),
                 fresh: fresh.as_deref(),
-                pace_ms: args["pace"].as_u64(),
-                float_tolerance: args["float_tolerance"].as_f64(),
+                pace_ms: opt_u64(args, "pace")?,
+                float_tolerance: opt_f64(args, "float_tolerance")?,
                 float_files: &strings("float_file"),
-                ready_secs: args["ready_timeout"].as_u64(),
+                ready_secs: opt_u64(args, "ready_timeout")?,
                 effects,
             })?)?
         }
@@ -1122,7 +1166,7 @@ fn call(name: &str, args: &Value) -> Result<Value> {
                 repo: &repo,
                 build: args["build"].as_str(),
                 timeout_secs,
-                port: args["port"].as_u64().and_then(|p| u16::try_from(p).ok()),
+                port: opt_u16(args, "port")?,
                 case: args["case"].as_str(),
             })?)?
         }
@@ -1420,6 +1464,18 @@ mod tests {
                 Some("rust-anything record rust/slug"),
             ),
             (
+                "`cargo` not found on PATH; run `rust-anything doctor`",
+                "missing_tool",
+                false,
+                Some("rust-anything doctor"),
+            ),
+            (
+                "running cargo: `cargo` not found on PATH; install it with `rustup`, or run `rust-anything doctor`",
+                "missing_tool",
+                false,
+                Some("rust-anything doctor"),
+            ),
+            (
                 "cargo build failed (exit status: 101):\nerror[E0308]",
                 "build_failed",
                 false,
@@ -1602,5 +1658,55 @@ mod tests {
             "rejected timeout must not create rust/app-cases"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn numeric_args_reject_wrong_types_negatives_and_overflow() {
+        assert_eq!(opt_u64(&json!({}), "min_ms").unwrap(), None);
+        assert_eq!(opt_u64(&json!({ "min_ms": null }), "min_ms").unwrap(), None);
+        assert_eq!(
+            opt_u64(&json!({ "min_ms": 250 }), "min_ms").unwrap(),
+            Some(250)
+        );
+        for bad in [json!(-1), json!("250"), json!(1.5), json!(true)] {
+            let err = opt_u64(&json!({ "min_ms": bad.clone() }), "min_ms").unwrap_err();
+            assert!(format!("{err}").contains("`min_ms`"), "{bad}: {err}");
+        }
+
+        assert_eq!(
+            opt_u16(&json!({ "port": 8080 }), "port").unwrap(),
+            Some(8080)
+        );
+        assert!(opt_u16(&json!({ "port": 70_000 }), "port").is_err());
+        assert!(opt_u16(&json!({ "port": -1 }), "port").is_err());
+        assert!(opt_u16(&json!({ "port": "8080" }), "port").is_err());
+
+        assert_eq!(opt_f64(&json!({}), "time").unwrap(), None);
+        assert_eq!(opt_f64(&json!({ "time": 2.5 }), "time").unwrap(), Some(2.5));
+        assert_eq!(opt_f64(&json!({ "time": 2 }), "time").unwrap(), Some(2.0));
+        for bad in [json!("2.5"), json!(true), json!([])] {
+            let err = opt_f64(&json!({ "time": bad.clone() }), "time").unwrap_err();
+            assert!(format!("{err}").contains("`time`"), "{bad}: {err}");
+        }
+
+        assert!(call("fuzz", &json!({ "crate": ".", "time": "10" })).is_err());
+        assert!(call("fuzz", &json!({ "crate": ".", "seed": "42" })).is_err());
+        assert!(call("fuzz", &json!({ "crate": ".", "cases": -1 })).is_err());
+        assert!(call("bench", &json!({ "crate": ".", "min_ms": -5 })).is_err());
+        assert!(call("report", &json!({ "crate": ".", "min_ms": "100" })).is_err());
+        assert!(call("diff", &json!({ "crate": ".", "float_tolerance": "1e-9" })).is_err());
+        assert!(call("record", &json!({ "crate": ".", "count": -1 })).is_err());
+        let bad_tol = call(
+            "record",
+            &json!({ "crate": ".", "float_tolerance": -1.0, "test_command": ["nonexistent-test-cmd"] }),
+        )
+        .unwrap_err();
+        assert!(
+            format!("{bad_tol:#}").contains("--float-tolerance"),
+            "{bad_tol:#}"
+        );
+        assert!(call("app_replay", &json!({ "repo": ".", "port": 70_000 })).is_err());
+        assert!(call("app_record", &json!({ "repo": ".", "pace": -10 })).is_err());
+        assert!(call("app_record", &json!({ "repo": ".", "ready_timeout": "30" })).is_err());
     }
 }

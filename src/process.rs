@@ -133,30 +133,25 @@ fn effective_env(cmd: &Command, key: &str) -> Option<std::ffi::OsString> {
     }
 }
 
-fn file_exists_with_pathext(path: &Path, cmd: &Command) -> bool {
+/// Matches `std::process::Command`'s executable check: exact file path, plus `.exe` on Windows
+/// when no extension is given (Rust does not expand `PATHEXT` for `Command::spawn`).
+#[cfg(windows)]
+fn file_exists_as_executable(path: &Path) -> bool {
     if path.is_file() {
         return true;
     }
-    #[cfg(windows)]
     if path.extension().is_none() {
-        let pathext = effective_env(cmd, "PATHEXT")
-            .unwrap_or_else(|| std::ffi::OsString::from(".COM;.EXE;.BAT;.CMD"));
-        let base = path.as_os_str();
-        for ext in pathext
-            .to_string_lossy()
-            .split(';')
-            .filter(|e| !e.is_empty())
-        {
-            let mut candidate = base.to_os_string();
-            candidate.push(ext);
-            if Path::new(&candidate).is_file() {
-                return true;
-            }
-        }
+        let mut with_exe = path.as_os_str().to_os_string();
+        with_exe.push(".exe");
+        return Path::new(&with_exe).is_file();
     }
-    #[cfg(not(windows))]
-    let _ = cmd;
     false
+}
+
+/// Matches `std::process::Command`'s executable check on non-Windows platforms.
+#[cfg(not(windows))]
+fn file_exists_as_executable(path: &Path) -> bool {
+    path.is_file()
 }
 
 /// Whether `cmd`'s executable exists at its explicit path or on `cmd`'s effective `PATH`.
@@ -165,22 +160,38 @@ fn file_exists_with_pathext(path: &Path, cmd: &Command) -> bool {
 fn program_exists(cmd: &Command) -> bool {
     let program = cmd.get_program();
     let prog_str = program.to_string_lossy();
+    let base = cmd
+        .get_current_dir()
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::current_dir().ok());
     if prog_str.contains('/') || prog_str.contains('\\') {
         let path = Path::new(program);
         return if path.is_absolute() {
-            file_exists_with_pathext(path, cmd)
+            file_exists_as_executable(path)
         } else {
-            let base = cmd
-                .get_current_dir()
-                .map(Path::to_path_buf)
-                .or_else(|| std::env::current_dir().ok());
-            base.is_some_and(|dir| file_exists_with_pathext(&dir.join(path), cmd))
+            base.is_some_and(|dir| file_exists_as_executable(&dir.join(path)))
         };
     }
     let Some(paths) = effective_env(cmd, "PATH") else {
         return false;
     };
-    std::env::split_paths(&paths).any(|dir| file_exists_with_pathext(&dir.join(program), cmd))
+    // On Unix, `Command::spawn` changes into `current_dir` before searching `PATH`; on Windows,
+    // `resolve_exe` resolves relative `PATH` entries against the parent's working directory.
+    let path_base = if cfg!(windows) {
+        std::env::current_dir().ok()
+    } else {
+        base
+    };
+    std::env::split_paths(&paths).any(|dir| {
+        let resolved = if dir.is_absolute() {
+            dir
+        } else if let Some(cwd) = &path_base {
+            cwd.join(dir)
+        } else {
+            dir
+        };
+        file_exists_as_executable(&resolved.join(program))
+    })
 }
 
 /// Turns a failed `Command::spawn` / `Command::output` into an actionable error.
@@ -418,6 +429,57 @@ mod tests {
             std::io::Error::new(std::io::ErrorKind::NotFound, "no interpreter"),
         );
         assert!(!explicit_err.downcast_ref::<SpawnError>().unwrap().missing);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn relative_path_entry_resolves_against_child_cwd() {
+        let dir = std::env::temp_dir().join(format!("ra-proc-relpath-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let bin = dir.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let name = if cfg!(windows) {
+            "fake-rel-tool.exe"
+        } else {
+            "fake-rel-tool"
+        };
+        std::fs::write(bin.join(name), "").unwrap();
+
+        let mut cmd = Command::new("fake-rel-tool");
+        cmd.current_dir(&dir).env("PATH", "bin");
+        let err = spawn_error(
+            &cmd,
+            "fake-rel-tool",
+            std::io::Error::new(std::io::ErrorKind::NotFound, "no interpreter"),
+        );
+        if cfg!(windows) {
+            assert!(
+                err.downcast_ref::<SpawnError>().unwrap().missing,
+                "on Windows, relative PATH entries resolve against the parent cwd, not child cwd"
+            );
+        } else {
+            assert!(
+                !err.downcast_ref::<SpawnError>().unwrap().missing,
+                "on Unix, relative PATH entries resolve against child cwd"
+            );
+        }
+
+        #[cfg(windows)]
+        {
+            std::fs::write(bin.join("only-cmd.cmd"), "@echo off\r\n").unwrap();
+            let mut cmd_only = Command::new("only-cmd");
+            cmd_only.env("PATH", &bin);
+            let err = spawn_error(
+                &cmd_only,
+                "only-cmd",
+                std::io::Error::new(std::io::ErrorKind::NotFound, "not found"),
+            );
+            assert!(
+                err.downcast_ref::<SpawnError>().unwrap().missing,
+                "bare extensionless lookup on Windows should not match .cmd via PATHEXT"
+            );
+        }
 
         let _ = std::fs::remove_dir_all(&dir);
     }

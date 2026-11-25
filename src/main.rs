@@ -830,6 +830,11 @@ fn run() -> Result<ExitCode> {
                 from_tests || test_command.is_empty(),
                 "a command after `--` is the test suite for `--from-tests`; add the flag"
             );
+            anyhow::ensure!(
+                count > 0 || inputs.is_some() || from_tests,
+                "`--count 0` records nothing: pass --count 1 or more, or give cases with --inputs or \
+                 --from-tests"
+            );
             let inputs = if from_tests {
                 let c = rust_anything::from_tests::capture(&crate_dir, &test_command)?;
                 say!(

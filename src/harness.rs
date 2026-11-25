@@ -276,7 +276,20 @@ pub(crate) fn generate_cases_salted(
     Ok((cases, traps, regex_functions))
 }
 
+/// `--count 0` with no `--inputs` (or `--from-tests`) would record nothing and replace
+/// `cases.jsonl` with an empty file, so it is refused before anything is touched.
+fn check_count(opts: &RecordOptions) -> Result<()> {
+    if opts.count == 0 && opts.inputs.is_none() {
+        bail!(
+            "`--count 0` records nothing: pass --count 1 or more, or give cases with --inputs or \
+             --from-tests"
+        );
+    }
+    Ok(())
+}
+
 pub fn record(opts: &RecordOptions) -> Result<RecordOutcome> {
+    check_count(opts)?;
     let crate_dir = std::path::absolute(opts.crate_dir)?;
     let opts = &RecordOptions {
         crate_dir: &crate_dir,
@@ -329,6 +342,7 @@ pub(crate) fn record_with(
 /// Records on a connected Android device: the cases are generated here, the original Kotlin
 /// runs under ART, and the results come back as the same `cases.jsonl`.
 pub fn record_android(opts: &RecordOptions, device: Option<&str>) -> Result<RecordOutcome> {
+    check_count(opts)?;
     let manifest = Manifest::load(opts.crate_dir)?;
     let (cases, traps, regex_functions) = generate_cases(opts, &manifest)?;
     let _ = std::fs::remove_file(opts.crate_dir.join(WORK_DIR).join(TIMED_OUT));
@@ -968,6 +982,12 @@ pub fn per_function_counts(crate_dir: &Path, outcome: &DiffOutcome) -> Result<Fu
 /// that `diff_full` verified, failing if `cases.jsonl` was modified concurrently.
 pub fn diff_full_with_counts(opts: &DiffOptions) -> Result<(DiffOutcome, FunctionCounts)> {
     let cases_path = opts.crate_dir.join(CASES);
+    if !cases_path.exists() {
+        bail!(
+            "no {CASES} in {} (run `rust-anything record` first)",
+            opts.crate_dir.display()
+        );
+    }
     let snapshot = std::fs::read_to_string(&cases_path)
         .with_context(|| format!("reading {}", cases_path.display()))?;
     let outcome = diff_full(opts)?;

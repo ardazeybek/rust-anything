@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- A failed MCP tool call whose program is missing (`` `cargo` not found on PATH ``) gets the
+  `missing_tool` code with `rust-anything doctor` as the next step, instead of a generic `failed`
+  (#557 by @Lewandox).
+- `record --count 0` (and MCP `record` with `count: 0`) without `--inputs` or `--from-tests` stops
+  with an error before touching `cases.jsonl` or the manifest, like `fuzz --cases 0`: it used to
+  replace the recording with an empty file and exit 0. `--count 0 --inputs <file>` still records
+  just the given cases (#539, #546 by @alvaroalonsoparrondo-a11y, with the early check and a test
+  from #556 by @ardazeybek).
+- `enable --partial` and `enable --only` (without `--force`) on a crate with no `cases.jsonl` say
+  ``no cases.jsonl in <crate> (run `rust-anything record` first)`` like plain `enable`, instead of
+  the bare `No such file or directory (os error 2)` (#540, #545 by @alvaroalonsoparrondo-a11y).
+- MCP tools refuse a numeric argument of the wrong type, a negative one or one out of range
+  (`count`, `rounds`, `cases`, `seed`, `min_ms`, `time`, `float_tolerance`, `port`, `pace`,
+  `ready_timeout`) instead of silently using the default; a `port` above 65535 is an error rather
+  than no port (#543 by @Lewandox).
+- The "not found on PATH" check behind `build`, `gate` and the other outside-tool steps looks up a
+  program the way it is spawned: on Windows only the name and `<name>.exe` count (a bare `.cmd`
+  script no longer does), and on Unix a relative `PATH` entry is resolved from the command's
+  working directory (#541 by @Lewandox).
 - MCP `bridge` refuses a `kind` other than `"napi"` or `"wasm"`, `record`, `build` and `diff` refuse a
   non-string `profile`, and `fuzz` refuses a non-string `keep`, instead of silently falling back to
   the default (#530 by @Lewandox).

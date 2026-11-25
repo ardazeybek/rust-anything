@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use rust_anything::{card, enable, shadow};
+use rust_anything::{card, enable, harness, shadow};
 
 fn missing(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -74,9 +74,33 @@ fn a_folder_without_a_manifest_still_names_the_manifest() {
 }
 
 #[test]
+fn enable_partial_without_cases_says_to_record_first() {
+    // `enable --partial` and `enable --only` (without `--force`) count passes per function through
+    // `diff_full_with_counts`, which read `cases.jsonl` straight away and failed with a bare
+    // "No such file or directory" instead of the hint plain `enable` gives.
+    let dir = missing("no-cases");
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = harness::diff_full_with_counts(&harness::DiffOptions {
+        crate_dir: &dir,
+        module: None,
+        ignore_key_order: false,
+        node_args: &[],
+        float_tolerance: None,
+    })
+    .unwrap_err();
+    let _ = std::fs::remove_dir_all(&dir);
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains(&format!("no cases.jsonl in {}", dir.display())),
+        "{msg}"
+    );
+    assert!(msg.contains("run `rust-anything record` first"), "{msg}");
+}
+
+#[test]
 fn bench_and_report_reject_zero_min_ms() {
     let dir = missing("zero-min-ms");
-    let err = rust_anything::harness::bench(&rust_anything::harness::BenchOptions {
+    let err = harness::bench(&harness::BenchOptions {
         crate_dir: &dir,
         min_ms: 0,
         resolve_from: None,
