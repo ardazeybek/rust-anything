@@ -952,24 +952,31 @@ pub fn diff_full(opts: &DiffOptions) -> Result<DiffOutcome> {
 /// `(passed, total)` recorded cases per function name.
 pub type FunctionCounts = BTreeMap<String, (usize, usize)>;
 
+fn read_cases(crate_dir: &Path) -> Result<String> {
+    let cases_path = crate_dir.join(CASES);
+    if !cases_path.exists() {
+        bail!(
+            "no {CASES} in {} (run `rust-anything record` first)",
+            crate_dir.display()
+        );
+    }
+    std::fs::read_to_string(&cases_path)
+        .with_context(|| format!("reading {}", cases_path.display()))
+}
+
 /// `(passed, total)` recorded cases for each function in `cases.jsonl`, using the full
 /// (untruncated) mismatches in `outcome`.
 pub fn per_function_counts(crate_dir: &Path, outcome: &DiffOutcome) -> Result<FunctionCounts> {
-    let cases_path = crate_dir.join(CASES);
-    let text = std::fs::read_to_string(&cases_path)
-        .with_context(|| format!("reading {}", cases_path.display()))?;
+    let text = read_cases(crate_dir)?;
     counts_from_cases_text(&text, outcome)
 }
 
 /// Runs `diff_full` and computes [`per_function_counts`] from the exact `cases.jsonl` snapshot
 /// that `diff_full` verified, failing if `cases.jsonl` was modified concurrently.
 pub fn diff_full_with_counts(opts: &DiffOptions) -> Result<(DiffOutcome, FunctionCounts)> {
-    let cases_path = opts.crate_dir.join(CASES);
-    let snapshot = std::fs::read_to_string(&cases_path)
-        .with_context(|| format!("reading {}", cases_path.display()))?;
+    let snapshot = read_cases(opts.crate_dir)?;
     let outcome = diff_full(opts)?;
-    let current = std::fs::read_to_string(&cases_path)
-        .with_context(|| format!("reading {}", cases_path.display()))?;
+    let current = read_cases(opts.crate_dir)?;
     anyhow::ensure!(
         current == snapshot,
         "{CASES} changed while diff was running; rerun `enable`"

@@ -370,3 +370,25 @@ fn enable_only_rebinds_selected_functions_and_updates_when_expanded() {
     assert_eq!(std::fs::read(root.join("fuzzy.py")).unwrap(), before);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn diff_full_with_counts_without_cases_suggests_record() {
+    let dir = std::env::temp_dir().join(format!(
+        "rust-anything-enable-no-cases-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = rust_anything::harness::diff_full_with_counts(&rust_anything::harness::DiffOptions {
+        crate_dir: &dir,
+        module: None,
+        ignore_key_order: false,
+        node_args: &[],
+        float_tolerance: None,
+    })
+    .unwrap_err();
+    let _ = std::fs::remove_dir_all(&dir);
+    let msg = format!("{err:#}");
+    assert!(msg.contains("no cases.jsonl in "), "{msg}");
+    assert!(msg.contains("run `rust-anything record` first"), "{msg}");
+}
