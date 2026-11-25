@@ -41,7 +41,7 @@ Gemacht in der Türkei 🇹🇷 von <a href="https://github.com/erkamyaman">erKa
   <sub>Prettier gegen seine Rust-Portierung an 59 echten Dateien aus ms, Fuse.js und json-server (Apple M4). Dieselbe Ausgabe, Byte für Byte. <a href="real-world.md#prettier">So wurde gemessen</a>.</sub>
 </p>
 
-<p align="center"><sub>PHP und C#: Aufzeichnen, Abspielen und die Front Door, dazu Unit-Ports über FFI und P/Invoke.</sub></p>
+<p align="center"><sub>PHP, C# und PowerShell: Unit-Ports über FFI und P/Invoke.</sub></p>
 
 <table>
   <tr>

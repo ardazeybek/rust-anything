@@ -227,8 +227,20 @@ struct Resp {
     body: Vec<u8>,
 }
 
+/// Picks an ephemeral port free on IPv4 loopback and not already bound on IPv6 loopback
+/// (on dual-stack hosts a port free on `127.0.0.1` can still be bound on `[::1]`, which
+/// `listening()` treats as in use).
 pub fn free_port() -> Result<u16> {
-    Ok(TcpListener::bind("127.0.0.1:0")?.local_addr()?.port())
+    for _ in 0..16 {
+        let v4 = TcpListener::bind("127.0.0.1:0")?;
+        let port = v4.local_addr()?.port();
+        match TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, port))) {
+            Ok(_) => return Ok(port),
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => continue,
+            Err(_) => return Ok(port),
+        }
+    }
+    bail!("could not find a free loopback port")
 }
 
 /// The loopback addresses a server may listen on. A server that binds to `localhost` can get only
@@ -411,10 +423,21 @@ struct Server {
     sinks: Option<crate::effects::Sinks>,
 }
 
+#[derive(Debug)]
+struct PortInUse(u16);
+
+impl std::fmt::Display for PortInUse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "port {} is already in use", self.0)
+    }
+}
+
+impl std::error::Error for PortInUse {}
+
 impl Server {
     fn start(command: &[String], launch: &Launch, repo: &Path, port: u16) -> Result<Server> {
         if listening(port, Duration::from_millis(100)).is_some() {
-            bail!("port {port} is already in use");
+            return Err(anyhow::Error::new(PortInUse(port)));
         }
         let dir = app::temp_dir("server")?;
         let words: Vec<String> = command
@@ -725,16 +748,38 @@ struct Launch<'a> {
     ready: Duration,
 }
 
+/// Starts a server on an auto-picked ephemeral port, retrying if another process claims the port
+/// in the brief window between `free_port()` and `Server::start()`.
+fn start_ephemeral(
+    command: &[String],
+    launch: &Launch,
+    repo: &Path,
+    mut next_port: impl FnMut() -> Result<u16>,
+) -> Result<Server> {
+    for attempt in 0..5 {
+        let port = next_port()?;
+        match Server::start(command, launch, repo, port) {
+            Ok(server) => return Ok(server),
+            Err(e) if e.downcast_ref::<PortInUse>().is_some() && attempt < 4 => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("loop always returns on attempt 4 or earlier")
+}
+
 /// Starts the server once and sends every request in order.
 fn run_all(
     command: &[String],
     launch: &Launch,
     repo: &Path,
-    port: u16,
+    fixed_port: Option<u16>,
     reqs: &[&Req],
     timeout: Duration,
 ) -> Result<Vec<Answer>> {
-    let mut server = Server::start(command, launch, repo, port)?;
+    let mut server = match fixed_port {
+        Some(port) => Server::start(command, launch, repo, port)?,
+        None => start_ephemeral(command, launch, repo, free_port)?,
+    };
     let mut out = Vec::new();
     for req in reqs {
         let before = server.fallbacks().unwrap_or(0);
@@ -1530,22 +1575,8 @@ pub(crate) fn record(
         effects: config.effects.as_ref(),
         ready: ready_timeout(&http),
     };
-    let one = run_all(
-        &config.run,
-        &launch,
-        repo,
-        fixed.map_or_else(free_port, Ok)?,
-        &reqs,
-        timeout,
-    )?;
-    let two = run_all(
-        &config.run,
-        &launch,
-        repo,
-        fixed.map_or_else(free_port, Ok)?,
-        &reqs,
-        timeout,
-    )?;
+    let one = run_all(&config.run, &launch, repo, fixed, &reqs, timeout)?;
+    let two = run_all(&config.run, &launch, repo, fixed, &reqs, timeout)?;
 
     let dir = app::cases_dir(repo).join(HTTP_DIR);
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -1800,10 +1831,7 @@ pub(crate) fn replay(
 ) -> Result<ReplayOutcome> {
     let dir = app::cases_dir(repo);
     let specs = app::only_case(load_specs(&dir.join(HTTP_DIR))?, case, |s| &s.name)?;
-    let port = match port.or(config.http.as_ref().and_then(|h| h.port)) {
-        Some(p) => p,
-        None => free_port()?,
-    };
+    let fixed_port = port.or(config.http.as_ref().and_then(|h| h.port));
     let reqs: Vec<&Req> = specs.iter().map(|s| &s.req).collect();
     let files = saved_snapshot(repo, config)?;
     let http = config.http.clone().unwrap_or_default();
@@ -1814,7 +1842,7 @@ pub(crate) fn replay(
         effects: config.effects.as_ref(),
         ready: ready_timeout(&http),
     };
-    let answers = run_all(command, &launch, repo, port, &reqs, timeout)?;
+    let answers = run_all(command, &launch, repo, fixed_port, &reqs, timeout)?;
     let mut outcome = ReplayOutcome {
         build: command.to_vec(),
         passed: 0,
@@ -2757,5 +2785,40 @@ mod tests {
         assert_eq!(kept.args, ["db.json"]);
         assert_eq!(kept.fresh, ["data"]);
         assert_eq!(kept.pace_ms, Some(25));
+    }
+
+    #[test]
+    fn start_ephemeral_retries_when_an_auto_picked_port_is_snatched() {
+        let busy = TcpListener::bind("127.0.0.1:0").unwrap();
+        let busy_port = busy.local_addr().unwrap().port();
+        let free = free_port().unwrap();
+        assert_ne!(free, busy_port);
+
+        let launch = Launch {
+            args: &[],
+            files: None,
+            pace: None,
+            effects: None,
+            ready: Duration::from_secs(1),
+        };
+        let repo = std::env::temp_dir();
+
+        // Explicit fixed port still fails immediately with PortInUse.
+        let fixed_err = Server::start(&[], &launch, &repo, busy_port)
+            .err()
+            .expect("busy fixed port must fail");
+        assert!(
+            fixed_err.downcast_ref::<PortInUse>().is_some(),
+            "{fixed_err:#}"
+        );
+
+        // Ephemeral start retries past the busy port and proceeds to the next port (where empty
+        // command fails after passing the busy-port check).
+        let mut ports = [busy_port, free].into_iter();
+        let err = start_ephemeral(&[], &launch, &repo, || Ok(ports.next().unwrap()))
+            .err()
+            .expect("empty command must fail after retrying past busy port");
+        assert!(err.downcast_ref::<PortInUse>().is_none(), "{err:#}");
+        assert!(format!("{err:#}").contains("empty command"), "{err:#}");
     }
 }

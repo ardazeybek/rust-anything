@@ -42,7 +42,7 @@ Fatto in Türkiye 🇹🇷 da <a href="https://github.com/erkamyaman">erKam Yama
   <sub>Prettier contro il suo port in Rust su 59 file reali di ms, Fuse.js e json-server (Apple M4). Stesso output, byte per byte. <a href="real-world.md#prettier">Come è stato misurato</a>.</sub>
 </p>
 
-<p align="center"><sub>PHP e C#: registrazione, ripetizione e front door, più i port delle unità tramite FFI e P/Invoke.</sub></p>
+<p align="center"><sub>PHP, C# e PowerShell: port delle unità tramite FFI e P/Invoke.</sub></p>
 
 <table>
   <tr>

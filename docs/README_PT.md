@@ -41,7 +41,7 @@ Feito na Turquia 🇹🇷 por <a href="https://github.com/erkamyaman">erKam Yama
   <sub>O Prettier contra a sua migração para Rust em 59 ficheiros reais do ms, Fuse.js e json-server (Apple M4). A mesma saída, byte a byte. <a href="real-world.md#prettier">Como foi medido</a>.</sub>
 </p>
 
-<p align="center"><sub>PHP e C#: gravação, repetição e front door, mais a migração de unidades por FFI e P/Invoke.</sub></p>
+<p align="center"><sub>PHP, C# e PowerShell: migração de unidades por FFI e P/Invoke.</sub></p>
 
 <table>
   <tr>

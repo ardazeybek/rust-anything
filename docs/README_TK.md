@@ -239,9 +239,9 @@ Birmeňzeş çykyş ýeterlik däl. Programmanyň daşaryk iberýän zatlaryny h
 C, PHP, C# we PowerShell-den başga her dil batch klaslaryny hem alýar (`--batch`): elementler serhetden bir gezek geçýär we
 Rust-da galýar, her çagyryş bolsa olaryň hemmesini ähli ýadrolarda işleýär.
 
-Dil repozitoriýden kesgitlenýär (`go.mod`, `pom.xml`, `.csproj` ýa-da `.sln`, `pyproject.toml`,
-`Gemfile`, `composer.json`, `package.json`, bolmasa iň köp duş gelýän çeşme faýllary boýunça); `--lang`
-ony el bilen görkezýär. Tipler çeşme kodundan alynýar: TS tipleri, Python hint-leri, C, Go, Java we C#
+Dil repozitoriýden kesgitlenýär (`go.mod`, `pom.xml`, `build.gradle`/`build.gradle.kts`, `.csproj` ýa-da `.sln`, `pyproject.toml`,
+`Gemfile`, `composer.json`, `package.json`, bolmasa iň köp duş gelýän çeşme faýllary boýunça); `.kt` çeşme faýllary bolan we `.java` faýly bolmadyk Gradle moduly Kotlin hasaplanýar, garyşyk modullar Java bolup galýar. `--lang`
+ony el bilen görkezýär. Tipler çeşme kodundan alynýar: TS tipleri, Python hint-leri, C, Go, Java, Kotlin we C#
 signaturalary, Ruby YARD tegleri, PHP tipleri we phpdoc; san hökmünde ulanylýan tipsiz parametrler san
 diýlip kabul edilýär.
 

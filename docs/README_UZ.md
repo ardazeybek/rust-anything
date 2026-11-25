@@ -240,9 +240,9 @@ Bir xil natija yetarli emas. Ilova tashqariga yuboradigan narsalarni ham yozib o
 C, PHP, C# va PowerShell'dan tashqari har bir til batch klasslarini ham oladi (`--batch`): elementlar ko'prikdan bir marta
 o'tadi va Rust'da qoladi, har bir chaqiruv esa barcha yadrolarda ularning hammasi ustida ishlaydi.
 
-Til repozitoriydan aniqlanadi (`go.mod`, `pom.xml`, `.csproj` yoki `.sln`, `pyproject.toml`,
-`Gemfile`, `composer.json`, `package.json`, aks holda eng ko'p uchraydigan manba fayllari); `--lang`
-buni almashtiradi. Tiplar manbadan olinadi: TS tiplari, Python type hint'lari, C, Go, Java va C#
+Til repozitoriydan aniqlanadi (`go.mod`, `pom.xml`, `build.gradle`/`build.gradle.kts`, `.csproj` yoki `.sln`, `pyproject.toml`,
+`Gemfile`, `composer.json`, `package.json`, aks holda eng ko'p uchraydigan manba fayllari); `.kt` manba fayllari bor va `.java` fayli yo'q Gradle moduli Kotlin hisoblanadi, aralash modullar Java bo'lib qoladi. `--lang`
+buni almashtiradi. Tiplar manbadan olinadi: TS tiplari, Python type hint'lari, C, Go, Java, Kotlin va C#
 signaturalari, Ruby YARD teglari, PHP tiplari va phpdoc; son sifatida ishlatilgan tipsiz parametrlar
 son deb aniqlanadi.
 

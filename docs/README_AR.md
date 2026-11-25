@@ -45,7 +45,7 @@
   <sub>Prettier مقابل نسخته المنقولة إلى Rust على 59 ملفًا حقيقيًا من ms وFuse.js وjson-server (Apple M4). المخرجات نفسها بايتًا ببايت. <a href="real-world.md#prettier">كيف قيس ذلك</a>.</sub>
 </p>
 
-<p align="center"><sub>PHP وC#: التسجيل والإعادة والواجهة الأمامية (front door)، مع نقل الوحدات عبر FFI وP/Invoke.</sub></p>
+<p align="center"><sub>PHP وC# وPowerShell: نقل الوحدات عبر FFI وP/Invoke.</sub></p>
 
 <table>
   <tr>

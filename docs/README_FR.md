@@ -41,7 +41,7 @@ Fait en Turquie 🇹🇷 par <a href="https://github.com/erkamyaman">erKam Yaman
   <sub>Prettier face à son portage Rust sur 59 fichiers réels issus de ms, Fuse.js et json-server (Apple M4). Même sortie, octet par octet. <a href="real-world.md#prettier">Comment c'est mesuré</a>.</sub>
 </p>
 
-<p align="center"><sub>PHP et C# : enregistrement, rejeu et porte d'entrée, plus les ports d'unités par FFI et P/Invoke.</sub></p>
+<p align="center"><sub>PHP, C# et PowerShell : ports d'unités par FFI et P/Invoke.</sub></p>
 
 <table>
   <tr>

@@ -42,7 +42,7 @@ Hecho en Türkiye 🇹🇷 por <a href="https://github.com/erkamyaman">erKam Yam
   <sub>Prettier frente a su porte en Rust sobre 59 archivos reales de ms, Fuse.js y json-server (Apple M4). La misma salida, byte a byte. <a href="real-world.md#prettier">Cómo se midió</a>.</sub>
 </p>
 
-<p align="center"><sub>PHP y C#: registro, repetición y puerta delantera, más portes de unidad por FFI y P/Invoke.</sub></p>
+<p align="center"><sub>PHP, C# y PowerShell: portes de unidad por FFI y P/Invoke.</sub></p>
 
 <table>
   <tr>
